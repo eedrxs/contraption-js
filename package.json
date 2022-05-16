@@ -1,0 +1,23 @@
+{
+  "name": "contraption",
+  "version": "1.0.0",
+  "description": "A utility library for working with smart contracts on Hedera",
+  "main": "contraption.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eedrxs/contraption-js.git"
+  },
+  "author": "Idris Abdul-Lateef",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/eedrxs/contraption-js/issues"
+  },
+  "homepage": "https://github.com/eedrxs/contraption-js#readme",
+  "dependencies": {
+    "@hashgraph/sdk": "^2.13.1",
+    "web3": "^1.7.3"
+  }
+}
