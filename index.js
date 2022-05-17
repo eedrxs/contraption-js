@@ -1,20 +1,142 @@
-const { createClient, ClientContract } = require("./lib/contraption");
-const { ACCOUNT_ID, PRIVATE_KEY } = require("./src/details");
-const { POLLFACTORY_ID, POLLFACTORY_ABI } = require("./src/abi");
+const {
+  Client,
+  AccountId,
+  PrivateKey,
+  ContractCallQuery,
+  ContractExecuteTransaction,
+  Hbar,
+} = require("@hashgraph/sdk");
+const Web3 = require("web3");
 
-let client = createClient(ACCOUNT_ID, PRIVATE_KEY);
-let pollFactory = new ClientContract(POLLFACTORY_ID, POLLFACTORY_ABI);
+const web3 = new Web3();
 
-async function main() {
-  console.log(`Calling getPollCount------------------------>`);
-
-  let { 0: result } = await pollFactory.getPollCount.call()({
-    client: client,
-    maxQueryPay: 0.03,
-    gas: 1000000,
-  });
-
-  console.log(`- Current poll count: ${result}`);
+function createClient(accountId, privateKey) {
+  const operatorId = AccountId.fromString(accountId);
+  const operatorKey = PrivateKey.fromString(privateKey);
+  return Client.forTestnet().setOperator(operatorId, operatorKey);
 }
 
-main();
+class SignerContract {
+  constructor(contractId, contractAbi) {
+    this.contractId = contractId;
+    this.contractAbi = contractAbi;
+
+    contractAbi.forEach(func => {
+      if (func.type === "function") {
+        if (func.stateMutability === "nonpayable") {
+          this[func.name] = {};
+          this[func.name].abi = func;
+          this[func.name].call = (parameters = []) => {
+            const encodedParameters = web3.eth.abi
+              .encodeFunctionCall(this[func.name].abi, parameters)
+              .slice(2);
+            const encodedParametersHex = Buffer.from(encodedParameters, "hex");
+
+            return async ({ maxTxFee, gas, signer }) => {
+              const contractExecuteTx = await new ContractExecuteTransaction()
+                .setContractId(this.contractId)
+                .setFunctionParameters(encodedParametersHex)
+                .setMaxTransactionFee(new Hbar(maxTxFee))
+                .setGas(gas)
+                .freezeWithSigner(signer);
+
+              await contractExecuteTx.executeWithSigner(_.signer);
+            };
+          };
+        }
+
+        if (func.stateMutability === "view") {
+          this[func.name] = {};
+          this[func.name].abi = func;
+          this[func.name].call = (parameters = []) => {
+            const encodedParameters = web3.eth.abi
+              .encodeFunctionCall(this[func.name].abi, parameters)
+              .slice(2);
+            const encodedParametersHex = Buffer.from(encodedParameters, "hex");
+
+            return async ({ maxQueryPay, gas, signer }) => {
+              const contractQueryTx = new ContractCallQuery()
+                .setContractId(this.contractId)
+                .setFunctionParameters(encodedParametersHex)
+                .setMaxQueryPayment(new Hbar(maxQueryPay))
+                .setGas(gas);
+              const contractQuerySubmit =
+                await contractQueryTx.executeWithSigner(signer);
+              const functionParameters = this[func.name].abi.outputs;
+              const resultHex = "0x".concat(
+                Buffer.from(contractQuerySubmit.bytes).toString("hex")
+              );
+              const result = web3.eth.abi.decodeParameters(
+                functionParameters,
+                resultHex
+              );
+              return result;
+            };
+          };
+        }
+      }
+    });
+  }
+}
+
+class ClientContract {
+  constructor(contractId, contractAbi) {
+    this.contractId = contractId;
+    this.contractAbi = contractAbi;
+
+    contractAbi.forEach(func => {
+      if (func.type === "function") {
+        if (func.stateMutability === "nonpayable") {
+          this[func.name] = {};
+          this[func.name].abi = func;
+          this[func.name].call = (parameters = []) => {
+            const encodedParameters = web3.eth.abi
+              .encodeFunctionCall(this[func.name].abi, parameters)
+              .slice(2);
+            const encodedParametersHex = Buffer.from(encodedParameters, "hex");
+
+            return async ({ maxTxFee, gas, client }) => {
+              const contractExecuteTx = new ContractExecuteTransaction()
+                .setContractId(this.contractId)
+                .setFunctionParameters(encodedParametersHex)
+                .setMaxTransactionFee(new Hbar(maxTxFee))
+                .setGas(gas);
+              await contractExecuteTx.execute(client);
+            };
+          };
+        }
+
+        if (func.stateMutability === "view") {
+          this[func.name] = {};
+          this[func.name].abi = func;
+          this[func.name].call = (parameters = []) => {
+            const encodedParameters = web3.eth.abi
+              .encodeFunctionCall(this[func.name].abi, parameters)
+              .slice(2);
+            const encodedParametersHex = Buffer.from(encodedParameters, "hex");
+
+            return async ({ maxQueryPay, gas, client }) => {
+              const contractQueryTx = new ContractCallQuery()
+                .setContractId(this.contractId)
+                .setFunctionParameters(encodedParametersHex)
+                .setMaxQueryPayment(new Hbar(maxQueryPay))
+                .setGas(gas);
+              const contractQuerySubmit = await contractQueryTx.execute(client);
+              const functionParameters = this[func.name].abi.outputs;
+              const resultHex = "0x".concat(
+                Buffer.from(contractQuerySubmit.bytes).toString("hex")
+              );
+              const result = web3.eth.abi.decodeParameters(
+                functionParameters,
+                resultHex
+              );
+              return result;
+            };
+          };
+        }
+      }
+    });
+  }
+}
+
+module.exports = { createClient, ClientContract, SignerContract };

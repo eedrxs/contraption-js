@@ -1,5 +1,5 @@
 {
-  "name": "contraption",
+  "name": "contraption-js",
   "version": "1.0.0",
   "description": "A utility library for working with smart contracts on Hedera",
   "main": "index.js",
